@@ -19,7 +19,7 @@ from typing_extensions import override
 from .layers import ConvModule, DepthwiseSeparableConvModule, NormType, Scale
 from .mobilenetv1 import MobileNetV1
 from .pafpn import PAFPN
-from .resnet import ResNetV1e
+from .resnet import BasicBlock, Bottleneck, ResNetV1e
 
 NUM_KPS = 5
 
@@ -117,16 +117,40 @@ class Head(nn.Module):
                 bbox_pred.shape[0], NUM_KPS * 2, bbox_pred.shape[2], bbox_pred.shape[3]
             )
         batch = cls_score.shape[0]
-        cls_score = cls_score.permute(0, 2, 3, 1).reshape(batch, -1, 1).sigmoid()
+        cls_score = cls_score.permute(0, 2, 3, 1).reshape(batch, -1, 1)
         bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(batch, -1, 4)
         kps_pred = kps_pred.permute(0, 2, 3, 1).reshape(batch, -1, NUM_KPS * 2)
         return cls_score, bbox_pred, kps_pred
 
-    @override
-    def forward(self, feats: Sequence[Tensor]) -> tuple[list[Tensor], list[Tensor], list[Tensor]]:
+    def predict(self, feats: Sequence[Tensor]) -> tuple[list[Tensor], list[Tensor], list[Tensor]]:
+        """Like ``forward`` but the scores are logits."""
         outs = [self.forward_single(f, i) for i, f in enumerate(feats)]
         scores, bboxes, kps = (list(t) for t in zip(*outs, strict=True))
         return scores, bboxes, kps
+
+    @override
+    def forward(self, feats: Sequence[Tensor]) -> tuple[list[Tensor], list[Tensor], list[Tensor]]:
+        logits, bboxes, kps = self.predict(feats)
+        return [s.sigmoid() for s in logits], bboxes, kps
+
+    def init_weights(self) -> None:
+        for convs in self.cls_stride_convs.values():
+            for m in convs.modules():
+                if isinstance(m, nn.Conv2d):
+                    nn.init.normal_(m.weight, std=0.01)
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
+        groups = [self.stride_cls, self.stride_reg]
+        if self.use_kps:
+            groups.append(self.stride_kps)
+        for group in groups:
+            for m in group.modules():
+                if isinstance(m, nn.Conv2d) and m.bias is not None:
+                    nn.init.normal_(m.weight, std=0.01)
+                    nn.init.zeros_(m.bias)
+        for m in self.stride_cls.modules():
+            if isinstance(m, nn.Conv2d) and m.bias is not None:
+                nn.init.constant_(m.bias, -4.595)
 
 
 @dataclass
@@ -151,7 +175,7 @@ def distance2bbox(points: Tensor, distance: Tensor) -> Tensor:
 
 
 def distance2kps(points: Tensor, distance: Tensor) -> Tensor:
-    offsets = distance.reshape(distance.shape[0], -1, 2)
+    offsets = distance.reshape(-1, NUM_KPS, 2)
     return points[:, None, :] + offsets
 
 
@@ -221,6 +245,32 @@ class SCRFD(nn.Module):
         if self.use_kps:
             return (*scores, *bboxes, *kps)
         return (*scores, *bboxes)
+
+    def predict(self, x: Tensor) -> tuple[list[Tensor], list[Tensor], list[Tensor]]:
+        """Per-stride score logits, box distances and keypoint offsets (training outputs)."""
+        return self.bbox_head.predict(self.neck(self.backbone(x)))
+
+    def init_weights(self) -> None:
+        """Initialise a model for training from scratch."""
+        for m in self.backbone.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.BatchNorm2d | nn.GroupNorm):
+                nn.init.ones_(m.weight)
+                nn.init.zeros_(m.bias)
+        for m in self.backbone.modules():
+            if isinstance(m, BasicBlock):
+                nn.init.zeros_(m.bn2.weight)
+            elif isinstance(m, Bottleneck):
+                nn.init.zeros_(m.bn3.weight)
+        for m in self.neck.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+        self.bbox_head.init_weights()
 
     @torch.no_grad()
     def detect(self, x: Tensor, score_thr: float = 0.5, nms_thr: float = 0.4) -> list[Detections]:

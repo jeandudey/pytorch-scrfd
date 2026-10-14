@@ -22,10 +22,12 @@ cpu = ["torch>=2.14.1", "torchvision"]
 cuda = ["torch>=2.14.1", "torchvision"]
 export = ["onnx", "onnxscript"]
 webcam = ["opencv-python>=5.0.0"]
+train = ["opencv-python>=5.0.0"]
 rocm = ["torch>=2.14.1", "torchvision", "triton-rocm"]
 
 [project.scripts]
 scrfd-export = "scrfd.export:main"
+scrfd-train = "scrfd.train:main"
 scrfd-webcam = "scrfd.webcam:main"
 
 [tool.ruff]

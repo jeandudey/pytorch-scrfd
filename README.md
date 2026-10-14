@@ -52,6 +52,44 @@ Without `--shape` the batch, height and width are dynamic. The outputs are
 `score_*`, `bbox_*` and (for keypoint models) `kps_*`, one per stride, as in the
 upstream exporter. Box and keypoint distances are in units of the stride.
 
+## Training
+
+`scrfd-train` trains any variant from scratch with the reference recipe: SGD with
+momentum, step learning-rate decay and linear warm-up, ATSS anchor assignment, quality
+focal loss, DIoU loss and (for keypoint variants) a smooth-L1 keypoint loss, on random
+square crops with flip and photometric augmentation. It needs the `train` extra.
+
+```console
+$ uv run --extra rocm --extra train scrfd-train scrfd_2.5g_bnkps --data-root data/retinaface
+```
+
+The dataset is [WIDER FACE](http://shuoyang1213.me/WIDERFACE/) with RetinaFace-style
+annotations (CrowdHuman, converted the same way, for `scrfd_crowdhuman_2.5g_bnkps`):
+
+```
+data/retinaface/
+    train/
+        images/
+        labelv2.txt
+    val/
+        images/
+        labelv2.txt
+```
+
+Each annotation file lists, per image, a `# <name> <width> <height>` line followed by one
+`x1 y1 x2 y2 [x y visible]*5` line per face (`-1 -1 -1` for an unlabelled keypoint, or a
+single trailing `1` for an ignored region).
+
+Snapshots are written to `work_dirs/<variant>/epoch_N.pth` (plus `latest.pth`) and can be
+used with `--snapshot` of the other tools; `--resume` continues an interrupted run, and the
+AP at IoU 0.5 on `val/` is printed every `--val-interval` epochs. Epochs, learning rate,
+batch size per process and schedule default to the variant's reference values and can be
+overridden. For several GPUs launch it with `torchrun`:
+
+```console
+$ uv run --extra rocm --extra train torchrun --nproc-per-node 4 -m scrfd.train scrfd_1g
+```
+
 ## License
 
 See `LICENSES/` and the per-file headers (this project follows the

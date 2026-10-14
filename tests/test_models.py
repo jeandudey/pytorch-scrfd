@@ -91,3 +91,11 @@ def test_crowdhuman_five_levels(tmp_path) -> None:  # noqa: ANN001
     export_onnx(model, tmp_path / "c.onnx")
     sess = ort.InferenceSession(str(tmp_path / "c.onnx"))
     assert len(sess.get_outputs()) == 15
+
+
+def test_detect_without_detections() -> None:
+    model = build_model("scrfd_500m_bnkps").eval()
+    (detections,) = model.detect(torch.zeros(1, 3, 64, 64), score_thr=1.1)
+    assert detections.boxes.shape == (0, 4)
+    assert detections.keypoints is not None
+    assert detections.keypoints.shape == (0, 5, 2)

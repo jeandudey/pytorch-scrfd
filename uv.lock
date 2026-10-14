@@ -1071,6 +1071,9 @@ rocm = [
     { name = "torchvision", version = "0.29.1+rocm7.2", source = { registry = "https://download.pytorch.org/whl/rocm7.2" } },
     { name = "triton-rocm" },
 ]
+train = [
+    { name = "opencv-python" },
+]
 webcam = [
     { name = "opencv-python" },
 ]
@@ -1090,6 +1093,7 @@ dev = [
 requires-dist = [
     { name = "onnx", marker = "extra == 'export'" },
     { name = "onnxscript", marker = "extra == 'export'" },
+    { name = "opencv-python", marker = "extra == 'train'", specifier = ">=5.0.0" },
     { name = "opencv-python", marker = "extra == 'webcam'", specifier = ">=5.0.0" },
     { name = "torch", specifier = ">=2.14.1" },
     { name = "torch", marker = "extra == 'cpu'", specifier = ">=2.14.1", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "scrfd", extra = "cpu" } },
@@ -1102,7 +1106,7 @@ requires-dist = [
     { name = "triton-rocm", marker = "extra == 'rocm'", index = "https://download.pytorch.org/whl/rocm7.2", conflict = { package = "scrfd", extra = "rocm" } },
     { name = "typing-extensions" },
 ]
-provides-extras = ["cpu", "cuda", "export", "webcam", "rocm"]
+provides-extras = ["cpu", "cuda", "export", "webcam", "train", "rocm"]
 
 [package.metadata.requires-dev]
 dev = [

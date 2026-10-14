@@ -32,7 +32,13 @@ class Config:
     dw_conv: bool = False
     use_kps: bool = False
     strides: tuple[int, ...] = (8, 16, 32)
-    num_anchors: int = 2
+    anchor_sizes: tuple[int, ...] = (16, 64, 256)
+    anchor_scales: tuple[float, ...] = (1, 2)
+    anchor_ratios: tuple[float, ...] = (1.0,)
+
+    @property
+    def num_anchors(self) -> int:
+        return len(self.anchor_scales) * len(self.anchor_ratios)
 
     def build(self) -> SCRFD:
         backbone: MobileNetV1 | ResNetV1e
@@ -143,7 +149,13 @@ CONFIGS: dict[str, Config] = {
     "scrfd_34g": SCRFD_34G,
     "scrfdgen2.5g": SCRFD_GEN2_5G,
     "scrfd_crowdhuman_2.5g_bnkps": replace(
-        SCRFD_2_5G, **PER_STRIDE_BN, use_kps=True, strides=(8, 16, 32, 64, 128), num_anchors=1
+        SCRFD_2_5G,
+        **PER_STRIDE_BN,
+        use_kps=True,
+        strides=(8, 16, 32, 64, 128),
+        anchor_sizes=(8, 16, 32, 64, 128),
+        anchor_scales=(3,),
+        anchor_ratios=(2.0,),
     ),
 }
 
