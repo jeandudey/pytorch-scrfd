@@ -1,14 +1,87 @@
+# SPDX-FileCopyrightText: 2026 Jean-Pierre De Jesus DIAZ <me@jeandudey.tech>
+#
+# SPDX-License-Identifier: MIT
+
 [project]
 name = "scrfd"
 version = "0.1.0"
-description = "Add your description here"
+description = "SCRFD face detector implemented in plain PyTorch"
 readme = "README.md"
 authors = [
     { name = "Jean-Pierre De Jesus DIAZ", email = "me@jeandudey.tech" }
 ]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "torch>=2.14.1",
+    "torchvision",
+    "typing-extensions",
+]
+
+[project.optional-dependencies]
+cpu = ["torch>=2.14.1", "torchvision"]
+cuda = ["torch>=2.14.1", "torchvision"]
+export = ["onnx", "onnxscript"]
+rocm = ["torch>=2.14.1", "torchvision", "triton-rocm"]
+
+[project.scripts]
+scrfd-export = "scrfd.export:main"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ANN", "PTH", "RET", "SIM", "RUF", "NPY", "PERF", "C4"]
+
+[tool.ty.rules]
+missing-override-decorator = "error"
+missing-type-argument = "error"
+division-by-zero = "error"
+unsound-assignment = "error"
 
 [build-system]
 requires = ["uv_build>=0.12.21,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "onnx",
+    "onnxruntime",
+    "onnxscript",
+    "pytest",
+    "ruff>=0.16.10",
+    "ty>=0.0.84",
+]
+
+[tool.uv]
+conflicts = [
+    [{ extra = "cpu" }, { extra = "cuda" }, { extra = "rocm" }],
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cuda", extra = "cuda" },
+    { index = "pytorch-rocm", extra = "rocm" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cuda", extra = "cuda" },
+    { index = "pytorch-rocm", extra = "rocm" },
+]
+
+triton-rocm = [{ index = "pytorch-rocm", extra = "rocm" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/rocm7.2"
+explicit = true
