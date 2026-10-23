@@ -12,10 +12,11 @@ Run it under ``torchrun`` to train on several GPUs.
 
 import argparse
 import importlib.util
+import json
 import os
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -60,6 +61,7 @@ class Recipe:
 
 DEFAULT_RECIPE = Recipe()
 RECIPES: dict[str, Recipe] = {
+    "scrfd_500m_bn": replace(DEFAULT_RECIPE, batch_size=16),
     "scrfd_500m_bnkps": replace(DEFAULT_RECIPE, batch_size=16),
     "scrfd_34g": replace(DEFAULT_RECIPE, lr=0.02),
     "scrfdgen2.5g": replace(DEFAULT_RECIPE, epochs=80, lr_steps=(55, 68)),
@@ -143,6 +145,12 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--size", type=int, default=640, help="training image size")
     parser.add_argument("--workers", type=int, default=3, help="data loading workers per process")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--crop-bias",
+        type=float,
+        default=0.0,
+        help="favour large random crops, and so small faces: odds grow with size**bias (0: equal)",
+    )
     parser.add_argument("--device", help="default: cuda if available, else cpu")
     parser.add_argument("--snapshot", type=Path, help="initialise the weights from this snapshot")
     parser.add_argument("--resume", type=Path, help="continue from a snapshot written by this tool")
@@ -227,6 +235,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         size=args.size,
         clip_border=recipe.clip_border,
         seed=args.seed,
+        crop_bias=args.crop_bias,
     )
     sampler: Sampler[Any]
     if world_size > 1:
@@ -250,6 +259,19 @@ def main(argv: Sequence[str] | None = None) -> None:
             val_records = load_records(val_annotations)
     if main_process:
         output.mkdir(parents=True, exist_ok=True)
+        (output / "recipe.json").write_text(
+            json.dumps(
+                {
+                    "variant": args.variant,
+                    "size": args.size,
+                    "seed": args.seed,
+                    "crop_bias": args.crop_bias,
+                    **asdict(recipe),
+                },
+                indent=2,
+            )
+            + "\n"
+        )
         print(
             f"{args.variant}: {len(dataset)} images, {len(loader)} iterations per epoch, "
             f"{world_size} process(es) x batch {recipe.batch_size}, device {device}"

@@ -26,6 +26,13 @@ def test_forward_shapes(name: str) -> None:
             assert outs[2 * levels + i].shape == (1, count, 10)
 
 
+def test_bn_variant_has_no_group_norm() -> None:
+    model = build_model("scrfd_500m_bn")
+    assert not any(isinstance(m, torch.nn.GroupNorm) for m in model.modules())
+    assert not model.use_kps
+    assert any(isinstance(m, torch.nn.BatchNorm2d) for m in model.bbox_head.modules())
+
+
 def test_state_dict_keys() -> None:
     keys = build_model("scrfd_500m_bnkps").state_dict().keys()
     assert "bbox_head.cls_stride_convs.(8, 8).0.depthwise_conv.conv.weight" in keys

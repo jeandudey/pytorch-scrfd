@@ -117,15 +117,20 @@ def random_square_crop(
     choices: Sequence[float] = CROP_CHOICES,
     clip_border: bool = True,
     attempts: int = 250,
+    weights: Sequence[float] | None = None,
 ) -> tuple[Array, Array, Array]:
     """Crop a random square whose side is a multiple of the short side of the image.
+
+    ``weights`` are the relative odds of each of ``choices`` (default: all equal). Larger squares
+    shrink the faces once resized, so favouring them trains on more small faces.
 
     Squares larger than the image are padded with gray. The square has to contain the centre of
     at least one box; the boxes whose centre is outside are dropped.
     """
     height, width = image.shape[:2]
+    probabilities = None if weights is None else np.asarray(weights) / np.sum(weights)
     for _ in range(attempts):
-        side = int(rng.choice(choices) * min(width, height))
+        side = int(rng.choice(choices, p=probabilities) * min(width, height))
         if side < 1:
             continue
         for _ in range(attempts):
@@ -255,7 +260,8 @@ class Sample:
 class RetinaFaceDataset(Dataset[Sample]):
     """Training samples: random square crop, resize, flip and photometric distortion.
 
-    Images without a usable box or smaller than ``MIN_IMAGE_SIDE`` are skipped. Set ``epoch``
+    Images without a usable box or smaller than ``MIN_IMAGE_SIDE`` are skipped. ``crop_bias`` > 0
+    favours large crops and so small faces. Set ``epoch``
     each epoch so that every epoch draws different augmentations.
     """
 
@@ -266,12 +272,15 @@ class RetinaFaceDataset(Dataset[Sample]):
         size: int = 640,
         clip_border: bool = True,
         seed: int = 0,
+        crop_bias: float = 0.0,
     ) -> None:
         self.images = images
         self.size = size
         self.clip_border = clip_border
         self.seed = seed
         self.epoch = 0
+        # Odds of a crop size grow with size**crop_bias; 0 keeps them equal.
+        self.crop_weights = [c**crop_bias for c in CROP_CHOICES]
         self.records = [
             r
             for r in load_records(annotations)
@@ -288,7 +297,7 @@ class RetinaFaceDataset(Dataset[Sample]):
         image = read_image(self.images / record.name)
         boxes, keypoints = record.boxes, record.keypoints
         image, boxes, keypoints = random_square_crop(
-            image, boxes, keypoints, rng, clip_border=self.clip_border
+            image, boxes, keypoints, rng, clip_border=self.clip_border, weights=self.crop_weights
         )
         image, boxes, keypoints = resize(image, boxes, keypoints, self.size, self.clip_border)
         if rng.random() < 0.5:

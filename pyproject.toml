@@ -20,13 +20,18 @@ dependencies = [
 [project.optional-dependencies]
 cpu = ["torch>=2.14.1", "torchvision"]
 cuda = ["torch>=2.14.1", "torchvision"]
+eval = ["opencv-python>=5.0.0", "scipy"]
 export = ["onnx", "onnxscript"]
 webcam = ["opencv-python>=5.0.0"]
 train = ["opencv-python>=5.0.0"]
 rocm = ["torch>=2.14.1", "torchvision", "triton-rocm"]
 
 [project.scripts]
+scrfd-bom = "scrfd.bom:main"
+scrfd-convert-openimages = "scrfd.openimages:main"
+scrfd-eval-widerface = "scrfd.widerface:main"
 scrfd-export = "scrfd.export:main"
+scrfd-fetch-openimages = "scrfd.fetch:main"
 scrfd-train = "scrfd.train:main"
 scrfd-webcam = "scrfd.webcam:main"
 
@@ -48,11 +53,13 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "jsonschema",
     "onnx",
     "onnxruntime",
     "onnxscript",
     "opencv-python>=5.0.0",
     "pytest",
+    "scipy",
     "ruff>=0.16.10",
     "ty>=0.0.84",
 ]

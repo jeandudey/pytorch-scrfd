@@ -138,6 +138,9 @@ PER_STRIDE_BN = {"norm": "bn", "strides_share": False}
 
 CONFIGS: dict[str, Config] = {
     "scrfd_500m": SCRFD_500M,
+    # Not an upstream config: scrfd_500m_bnkps without keypoints, so that Open Images can train it.
+    # No GroupNorm anywhere, so every normalisation folds into its convolution.
+    "scrfd_500m_bn": replace(SCRFD_500M, **PER_STRIDE_BN, scale_mode=0),
     "scrfd_500m_bnkps": replace(SCRFD_500M, **PER_STRIDE_BN, scale_mode=0, use_kps=True),
     "scrfd_1g": SCRFD_1G,
     "scrfd_1gbn": replace(SCRFD_1G, **PER_STRIDE_BN),
@@ -178,6 +181,7 @@ def _factory(name: str) -> Callable[[], SCRFD]:
 
 
 scrfd_500m = _factory("scrfd_500m")
+scrfd_500m_bn = _factory("scrfd_500m_bn")
 scrfd_500m_bnkps = _factory("scrfd_500m_bnkps")
 scrfd_1g = _factory("scrfd_1g")
 scrfd_1gbn = _factory("scrfd_1gbn")

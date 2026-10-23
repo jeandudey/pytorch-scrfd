@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
+import json
 from pathlib import Path
 
 import cv2
@@ -13,6 +14,7 @@ from scrfd import CONFIGS, build_model, load_snapshot
 from scrfd.anchors import grid_anchors
 from scrfd.assign import atss_assign
 from scrfd.dataset import (
+    CROP_CHOICES,
     RetinaFaceDataset,
     horizontal_flip,
     load_records,
@@ -84,6 +86,17 @@ def test_square_crop_keeps_box_centres() -> None:
         assert (new_boxes >= 0).all()
         assert (new_boxes <= side).all()
         assert new_keypoints.shape == (1, 5, 3)
+
+
+def test_square_crop_weights_favour_large_crops() -> None:
+    rng = np.random.default_rng(2)
+    image = np.zeros((100, 100, 3), np.float32)
+    boxes = np.array([[40, 40, 60, 60]], np.float32)
+    keypoints = np.zeros((1, 5, 3), np.float32)
+    weights = [0.0] * (len(CROP_CHOICES) - 1) + [1.0]
+    for _ in range(10):
+        crop, _, _ = random_square_crop(image, boxes, keypoints, rng, weights=weights)
+        assert crop.shape[0] == int(CROP_CHOICES[-1] * 100)
 
 
 def test_resize_and_flip() -> None:
@@ -234,6 +247,8 @@ def test_train_end_to_end(tmp_path: Path, capsys: pytest.CaptureFixture[str]) ->
     assert "val AP@0.5" in out
     snapshot = output / "epoch_2.pth"
     assert (output / "epoch_1.pth").exists()
+    recipe = json.loads((output / "recipe.json").read_text())
+    assert recipe["variant"] == "scrfd_500m_bnkps" and recipe["epochs"] == 2
     assert (output / "latest.pth").resolve() == snapshot.resolve()
     load_snapshot(build_model("scrfd_500m_bnkps"), snapshot)
     main(

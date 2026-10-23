@@ -37,7 +37,8 @@ model = load_snapshot(build_model("scrfd_10g_bnkps"), "snapshot.pth").eval()
 detections = model.detect(torch.randn(1, 3, 640, 640), score_thr=0.5, nms_thr=0.4)
 ```
 
-Variants: `scrfd_500m`, `scrfd_500m_bnkps`, `scrfd_1g`, `scrfd_1gbn`, `scrfd_1.3g`,
+Variants: `scrfd_500m`, `scrfd_500m_bn` (batch norm only, no keypoints: it folds fully for
+quantization), `scrfd_500m_bnkps`, `scrfd_1g`, `scrfd_1gbn`, `scrfd_1.3g`,
 `scrfd_2.5g`, `scrfd_2.5g_bnkps`, `scrfd_10g`, `scrfd_10g_bnkps`, `scrfd_34g`,
 `scrfdgen2.5g`, `scrfd_crowdhuman_2.5g_bnkps` (5 strides, 1 anchor). Each is also available as a function in `scrfd.variants`.
 
@@ -89,6 +90,65 @@ overridden. For several GPUs launch it with `torchrun`:
 ```console
 $ uv run --extra rocm --extra train torchrun --nproc-per-node 4 -m scrfd.train scrfd_1g
 ```
+
+### Open Images (no WIDER FACE licence)
+
+[Open Images V7](https://storage.googleapis.com/openimages/web/index.html) has `Human face`
+boxes under CC BY 4.0 (images: CC BY 2.0 as listed by Flickr; credit the authors). It has no
+landmarks, so only the variants without `_bnkps` can be trained on it. One command downloads
+the CSVs (the train ones are 2-3 GB), picks the CC BY images with faces, downloads them,
+converts the boxes and writes the per-image credits to `ATTRIBUTION.csv`:
+
+```console
+$ uv run --extra rocm --extra train scrfd-fetch-openimages --max-train 20000 --max-val 2000
+$ uv run --extra rocm --extra train scrfd-train scrfd_2.5g --data-root data/openimages
+```
+
+Without `--max-*` all the face images are fetched. Every step is skipped when its result is
+already in `data/openimages`, so an interrupted run continues where it stopped. Images under
+another license than CC BY and images with an `IsGroupOf` face box (the faces in it would be
+trained on as background) are left out. `scrfd-convert-openimages` does the conversion alone
+from CSVs and images you downloaded yourself. Epochs and the lr schedule are those of
+WIDER FACE; tune them to the dataset size.
+
+### Comparing with SCRFD on WIDER FACE
+
+`scrfd-eval-widerface` reports the Easy / Medium / Hard AP that the SCRFD paper uses, with the
+protocol of the official evaluation tools (IoU 0.5, 1000 score thresholds, ignored faces). It
+only evaluates: the images and ground truth stay under WIDER FACE's non-commercial research
+terms and must not be used for training or shipped with a model. Download `WIDER_val.zip` and
+`eval_tools.zip` from the [WIDER FACE page](http://shuoyang1213.me/WIDERFACE/), unzip them, and:
+
+```console
+$ uv run --extra rocm --extra eval scrfd-eval-widerface scrfd_500m \
+      --snapshot work_dirs/quick/epoch_60.pth \
+      --images WIDER_val/images --gt eval_tools/ground_truth
+```
+
+Images are fitted into a 640x640 canvas (`--size`) without test-time augmentation. The published
+SCRFD numbers may use a different test size or scales, so check the setting when comparing.
+
+### Provenance and attribution (BOMs)
+
+After training, `scrfd-bom` describes the model and the data it came from:
+
+```console
+$ uv run --extra train scrfd-bom scrfd_2.5g work_dirs/scrfd_2.5g/epoch_640.pth \
+      --author "Jane Doe" --ap 0.87 --license MIT
+```
+
+It writes next to the snapshot a CycloneDX 1.6 ML-BOM (`bom.cdx.json`), an SPDX 3.0.1 document
+with the AI and Dataset profiles (`bom.spdx3.json`), and a copy of each split's credits
+(`ATTRIBUTION.train.csv`, `ATTRIBUTION.val.csv`). The BOMs hold the SHA-256 of the model, the
+training recipe (`recipe.json`, written by `scrfd-train`), the datasets with their licenses
+and the modifications made to them. It refuses to run if an image of a split has no credit.
+Ship these files with the weights.
+
+The tests check the BOMs' structure; to also validate them against the official JSON schemas,
+download `bom-1.6.schema.json`, `spdx.schema.json` and `jsf-0.82.schema.json` from
+[CycloneDX/specification](https://github.com/CycloneDX/specification/tree/master/schema) and
+the SPDX 3.0.1 JSON schema (`spdx-json-schema.json`, saved as `spdx-schema.json`) from
+<https://spdx.org/schema/3.0.1/>, and run `BOM_SCHEMAS=<folder> pytest tests/test_bom.py`.
 
 ## License
 
