@@ -20,8 +20,9 @@ dependencies = [
 [project.optional-dependencies]
 cpu = ["torch>=2.14.1", "torchvision"]
 cuda = ["torch>=2.14.1", "torchvision"]
-eval = ["opencv-python>=5.0.0", "scipy"]
+eval = ["opencv-python>=5.0.0", "scipy"]  # plus onnxruntime for --onnx
 export = ["onnx", "onnxscript"]
+quantize = ["onnx", "onnxruntime", "onnxscript", "opencv-python>=5.0.0"]
 webcam = ["opencv-python>=5.0.0"]
 train = ["opencv-python>=5.0.0"]
 rocm = ["torch>=2.14.1", "torchvision", "triton-rocm"]
@@ -32,6 +33,7 @@ scrfd-convert-openimages = "scrfd.openimages:main"
 scrfd-eval-widerface = "scrfd.widerface:main"
 scrfd-export = "scrfd.export:main"
 scrfd-fetch-openimages = "scrfd.fetch:main"
+scrfd-quantize = "scrfd.quantize:main"
 scrfd-train = "scrfd.train:main"
 scrfd-webcam = "scrfd.webcam:main"
 

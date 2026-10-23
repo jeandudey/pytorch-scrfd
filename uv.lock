@@ -1422,6 +1422,12 @@ export = [
     { name = "onnx" },
     { name = "onnxscript" },
 ]
+quantize = [
+    { name = "onnx" },
+    { name = "onnxruntime" },
+    { name = "onnxscript" },
+    { name = "opencv-python" },
+]
 rocm = [
     { name = "torch", version = "2.14.1+rocm7.2", source = { registry = "https://download.pytorch.org/whl/rocm7.2" } },
     { name = "torchvision", version = "0.29.1+rocm7.2", source = { registry = "https://download.pytorch.org/whl/rocm7.2" } },
@@ -1451,8 +1457,12 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "onnx", marker = "extra == 'export'" },
+    { name = "onnx", marker = "extra == 'quantize'" },
+    { name = "onnxruntime", marker = "extra == 'quantize'" },
     { name = "onnxscript", marker = "extra == 'export'" },
+    { name = "onnxscript", marker = "extra == 'quantize'" },
     { name = "opencv-python", marker = "extra == 'eval'", specifier = ">=5.0.0" },
+    { name = "opencv-python", marker = "extra == 'quantize'", specifier = ">=5.0.0" },
     { name = "opencv-python", marker = "extra == 'train'", specifier = ">=5.0.0" },
     { name = "opencv-python", marker = "extra == 'webcam'", specifier = ">=5.0.0" },
     { name = "scipy", marker = "extra == 'eval'" },
@@ -1467,7 +1477,7 @@ requires-dist = [
     { name = "triton-rocm", marker = "extra == 'rocm'", index = "https://download.pytorch.org/whl/rocm7.2", conflict = { package = "scrfd", extra = "rocm" } },
     { name = "typing-extensions" },
 ]
-provides-extras = ["cpu", "cuda", "eval", "export", "webcam", "train", "rocm"]
+provides-extras = ["cpu", "cuda", "eval", "export", "quantize", "webcam", "train", "rocm"]
 
 [package.metadata.requires-dev]
 dev = [

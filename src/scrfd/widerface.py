@@ -16,13 +16,14 @@ import importlib.util
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 import numpy as np
 import torch
 from numpy.typing import NDArray
 
 from .dataset import letterbox, read_image
-from .model import SCRFD
+from .model import SCRFD, Detections
 from .snapshot import load_snapshot
 from .variants import CONFIGS, build_model
 
@@ -31,6 +32,38 @@ SETTINGS = ("easy", "medium", "hard")
 IOU_THRESHOLD = 0.5
 NUM_THRESHOLDS = 1000
 SCORE_THRESHOLD = 0.01
+
+
+class Detector(Protocol):
+    def eval(self) -> object: ...
+
+    def detect(self, x: torch.Tensor, score_thr: float, nms_thr: float) -> list[Detections]: ...
+
+
+class OnnxDetector:
+    """Runs an exported model (float or quantized) with ONNX Runtime, on the CPU.
+
+    The network input has the fixed size the model was exported with. ``model`` only supplies
+    the decoding of the outputs, so its weights do not matter.
+    """
+
+    def __init__(self, path: Path, model: SCRFD) -> None:
+        import onnxruntime
+
+        self.session = onnxruntime.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        self.model = model
+
+    def eval(self) -> None:
+        """Nothing to switch: an exported model is always in inference mode."""
+
+    def detect(self, x: torch.Tensor, score_thr: float, nms_thr: float) -> list[Detections]:
+        outputs = self.session.run(None, {"image": x.cpu().numpy()})
+        return self.model.postprocess(
+            tuple(torch.from_numpy(o) for o in outputs),
+            (x.shape[2], x.shape[3]),
+            score_thr,
+            nms_thr,
+        )
 
 
 @dataclass
@@ -157,7 +190,7 @@ def score(images: Sequence[Image], detections: Sequence[Array]) -> dict[str, flo
 
 @torch.no_grad()
 def detect_all(
-    model: SCRFD,
+    model: Detector,
     images: Sequence[Image],
     root: Path,
     device: torch.device,
@@ -181,7 +214,13 @@ def detect_all(
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="scrfd-eval-widerface", description=__doc__)
     parser.add_argument("variant", choices=sorted(CONFIGS), help="model variant")
-    parser.add_argument("--snapshot", type=Path, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--snapshot", type=Path, help="a .pth snapshot, run with PyTorch")
+    source.add_argument(
+        "--onnx",
+        type=Path,
+        help="an ONNX model of the variant (see scrfd-quantize), run on the CPU",
+    )
     parser.add_argument("--images", type=Path, required=True, help="WIDER_val/images")
     parser.add_argument("--gt", type=Path, required=True, help="eval_tools/ground_truth")
     parser.add_argument("--size", type=int, default=640, help="network input size")
@@ -191,18 +230,28 @@ def main(argv: Sequence[str] | None = None) -> None:
     if importlib.util.find_spec("scipy") is None or importlib.util.find_spec("cv2") is None:
         msg = "scrfd-eval-widerface needs the 'eval' extra: pip install 'scrfd[eval]'\n"
         raise SystemExit(msg)
+    if args.onnx is not None and importlib.util.find_spec("onnxruntime") is None:
+        msg = "scrfd-eval-widerface --onnx needs onnxruntime: pip install 'scrfd[quantize]'\n"
+        raise SystemExit(msg)
 
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     model = build_model(args.variant)
-    load_snapshot(model, args.snapshot)
-    model.to(device)
+    detector: Detector
+    if args.onnx is not None:
+        device = torch.device("cpu")
+        detector = OnnxDetector(args.onnx, model)
+    else:
+        load_snapshot(model, args.snapshot)
+        detector = model.to(device)
     images = load_ground_truth(args.gt)
 
     def progress(done: int) -> None:
         if done % 500 == 0 or done == len(images):
             print(f"  {done}/{len(images)} images", flush=True)
 
-    detections = detect_all(model, images, args.images, device, args.size, args.nms_thr, progress)
+    detections = detect_all(
+        detector, images, args.images, device, args.size, args.nms_thr, progress
+    )
     for setting, ap in score(images, detections).items():
         print(f"{setting.capitalize():<6} val AP: {ap:.4f}")
 

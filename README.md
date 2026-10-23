@@ -53,6 +53,23 @@ Without `--shape` the batch, height and width are dynamic. The outputs are
 `score_*`, `bbox_*` and (for keypoint models) `kps_*`, one per stride, as in the
 upstream exporter. Box and keypoint distances are in units of the stride.
 
+## Int8 quantization
+
+```console
+$ uv run --extra quantize scrfd-quantize scrfd_500m_bn --snapshot snapshot.pth \
+    --calibration data/openimages/train/images --output model-int8.onnx
+$ uv run --extra eval --extra quantize scrfd-eval-widerface scrfd_500m_bn \
+    --onnx model-int8.onnx --images WIDER_val/images --gt eval_tools/ground_truth
+```
+
+Post-training static quantization (QDQ, per-channel int8) with activation ranges calibrated on
+256 random images of `--calibration`: use training images, never the ones you evaluate on.
+BatchNorm folds into the convolutions on export, so the variants with BatchNorm heads
+(`scrfd_500m_bn`, `scrfd_500m_bnkps`, ...) quantize with almost no loss; GroupNorm does not
+fold. `--onnx` scores a float or quantized ONNX model on the CPU. On `scrfd_500m_bn` trained on
+20k Open Images images, int8 takes the model from 2.62 to 0.94 MB and WIDER FACE val AP from
+81.3 / 73.9 / 38.8 to 81.1 / 73.6 / 38.5 (Easy / Medium / Hard).
+
 ## Training
 
 `scrfd-train` trains any variant from scratch with the reference recipe: SGD with
