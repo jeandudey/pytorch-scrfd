@@ -167,6 +167,22 @@ download `bom-1.6.schema.json`, `spdx.schema.json` and `jsf-0.82.schema.json` fr
 the SPDX 3.0.1 JSON schema (`spdx-json-schema.json`, saved as `spdx-schema.json`) from
 <https://spdx.org/schema/3.0.1/>, and run `BOM_SCHEMAS=<folder> pytest tests/test_bom.py`.
 
+### Packaging a release
+
+`scrfd-package` gathers everything to publish into one folder: the weights alone (no optimizer
+state), the float ONNX model, the int8 model when you pass `--calibration`, the BOMs with the
+image credits, and `SHA256SUMS`.
+
+```console
+$ uv run --extra train --extra quantize scrfd-package scrfd_500m_bn work_dirs/hero/epoch_10.pth \
+      --output release/scrfd_500m_bn --author "Jane Doe" --data-root data/openimages-full \
+      --ap 0.85 --license Apache-2.0 --calibration data/openimages-full/train/images
+```
+
+Add a model card and the license text, then upload the folder, for example with
+`uvx --from huggingface_hub hf upload <user>/<name> release/scrfd_500m_bn .`. That command
+creates the repository as **public** when it doesn't exist.
+
 ## License
 
 See `LICENSES/` and the per-file headers (this project follows the
