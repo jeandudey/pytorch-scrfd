@@ -267,6 +267,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                     "seed": args.seed,
                     "crop_bias": args.crop_bias,
                     **asdict(recipe),
+                    "data_root": str(data_root),  # the recipe's own is only a default
                 },
                 indent=2,
             )

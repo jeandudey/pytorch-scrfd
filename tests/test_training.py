@@ -249,6 +249,7 @@ def test_train_end_to_end(tmp_path: Path, capsys: pytest.CaptureFixture[str]) ->
     assert (output / "epoch_1.pth").exists()
     recipe = json.loads((output / "recipe.json").read_text())
     assert recipe["variant"] == "scrfd_500m_bnkps" and recipe["epochs"] == 2
+    assert recipe["data_root"] == str(tmp_path)
     assert (output / "latest.pth").resolve() == snapshot.resolve()
     load_snapshot(build_model("scrfd_500m_bnkps"), snapshot)
     main(
